@@ -26,15 +26,26 @@ if file:
 
     # ✅ AUTO-MAP COMMON COLUMN VARIATIONS
     col_map = {
-        'date': 'date',
-        'item_name': 'item_name',
-        'item': 'item_name',
-        'product': 'item_name',
-        'quantity_sold': 'quantity_sold',
-        'qty': 'quantity_sold',
-        'quantity': 'quantity_sold',
-        'event': 'event'
-    }
+    'date': 'date',
+
+    # item column variations
+    'item_name': 'item_name',
+    'item': 'item_name',
+    'items': 'item_name',
+    'product': 'item_name',
+    'food_item': 'item_name',
+    'dish': 'item_name',
+    'menu_item': 'item_name',
+
+    # quantity variations
+    'quantity_sold': 'quantity_sold',
+    'qty': 'quantity_sold',
+    'quantity': 'quantity_sold',
+    'sales': 'quantity_sold',
+
+    # event
+    'event': 'event'
+}
 
     df = df.rename(columns={c: col_map[c] for c in df.columns if c in col_map})
 

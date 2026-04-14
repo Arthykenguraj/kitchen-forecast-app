@@ -1,5 +1,3 @@
-# app.py
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,19 +9,10 @@ st.set_page_config(layout="wide", page_title="Demand Intelligence Dashboard")
 st.title("🍽️ Demand Intelligence & Kitchen Forecast System")
 
 # -----------------------------
-# 📂 Upload Section
+# Upload
 # -----------------------------
 st.sidebar.header("📂 Upload Data")
-
 file = st.sidebar.file_uploader("Upload Sales File (Excel/CSV)", type=["xlsx", "csv"])
-
-st.sidebar.markdown("""
-### Expected Columns:
-- Date
-- Item Name
-- Quantity sold
-- Event (optional)
-""")
 
 if file:
 
@@ -32,138 +21,111 @@ if file:
     # -----------------------------
     df = pd.read_excel(file) if file.name.endswith("xlsx") else pd.read_csv(file)
 
-    # ✅ CLEAN COLUMN NAMES (fixes your error)
+    # ✅ STANDARDIZE COLUMN NAMES (ONLY ONCE)
     df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
 
-    # Debug: show detected columns
-    st.write("Detected Columns:", df.columns)
+    # ✅ AUTO-MAP COMMON COLUMN VARIATIONS
+    col_map = {
+        'date': 'date',
+        'item_name': 'item_name',
+        'item': 'item_name',
+        'product': 'item_name',
+        'quantity_sold': 'quantity_sold',
+        'qty': 'quantity_sold',
+        'quantity': 'quantity_sold',
+        'event': 'event'
+    }
 
-    # ✅ RENAME FLEXIBLY
-    df = df.rename(columns={
-        'date': 'Date',
-        'item_name': 'Item Name',
-        'item': 'Item Name',
-        'product': 'Item Name',
-        'quantity_sold': 'Quantity sold',
-        'qty': 'Quantity sold',
-        'quantity': 'Quantity sold',
-        'event': 'Event'
-    })
+    df = df.rename(columns={c: col_map[c] for c in df.columns if c in col_map})
 
-    # ✅ CHECK REQUIRED COLUMNS
-    required_cols = ['Date', 'Item Name', 'Quantity sold']
-    missing = [col for col in required_cols if col not in df.columns]
+    # ✅ CHECK REQUIRED
+    required = ['date', 'item_name', 'quantity_sold']
+    missing = [c for c in required if c not in df.columns]
 
     if missing:
         st.error(f"❌ Missing columns: {missing}")
         st.stop()
 
-    df['Date'] = pd.to_datetime(df['Date'])
+    # -----------------------------
+    # Preprocessing
+    # -----------------------------
+    df['date'] = pd.to_datetime(df['date'])
 
-    # Fill missing event
-    if 'Event' not in df.columns:
-        df['Event'] = 'Normal'
+    if 'event' not in df.columns:
+        df['event'] = 'normal'
     else:
-        df['Event'] = df['Event'].fillna('Normal')
+        df['event'] = df['event'].fillna('normal')
 
     # -----------------------------
     # Feature Engineering
     # -----------------------------
-    df['Day'] = df['Date'].dt.day_name()
-    df['Is_Weekend'] = df['Day'].isin(['Saturday', 'Sunday'])
-    df['Month'] = df['Date'].dt.month
+    df['day'] = df['date'].dt.day_name()
+    df['is_weekend'] = df['day'].isin(['Saturday', 'Sunday'])
+    df['month'] = df['date'].dt.month
 
-    df.loc[df['Is_Weekend'], 'Event'] = df['Event'] + "_Weekend"
+    df.loc[df['is_weekend'], 'event'] = df['event'] + "_weekend"
 
     # -----------------------------
-    # 📊 OVERVIEW DASHBOARD
+    # Overview
     # -----------------------------
     st.header("📊 Overview")
 
-    total_sales = df['Quantity sold'].sum()
-    avg_daily = df.groupby('Date')['Quantity sold'].sum().mean()
-    total_items = df['Item Name'].nunique()
-    volatility = df['Quantity sold'].std()
+    total_sales = df['quantity_sold'].sum()
+    avg_daily = df.groupby('date')['quantity_sold'].sum().mean()
+    total_items = df['item_name'].nunique()
+    volatility = df['quantity_sold'].std()
 
-    col1, col2, col3, col4 = st.columns(4)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Sales", int(total_sales))
+    c2.metric("Avg Daily", int(avg_daily))
+    c3.metric("Items", total_items)
+    c4.metric("Volatility", round(volatility, 2))
 
-    col1.metric("Total Sales", int(total_sales))
-    col2.metric("Avg Daily Demand", int(avg_daily))
-    col3.metric("Unique Items", total_items)
-    col4.metric("Volatility", round(volatility, 2))
-
-    # Trend
-    st.subheader("📈 Daily Demand Trend")
-    trend = df.groupby('Date')['Quantity sold'].sum()
-    st.line_chart(trend)
-
-    # Item distribution
-    st.subheader("🍛 Item Distribution")
-    item_dist = df.groupby('Item Name')['Quantity sold'].sum()
-    st.bar_chart(item_dist)
-
-    # Weekend vs Weekday
-    st.subheader("📅 Weekday vs Weekend")
-    weekend_comp = df.groupby('Is_Weekend')['Quantity sold'].mean()
-    st.bar_chart(weekend_comp)
-
-    # Day pattern
-    st.subheader("📆 Day of Week Pattern")
-    day_pattern = df.groupby('Day')['Quantity sold'].mean()
-    st.bar_chart(day_pattern)
+    # Charts
+    st.line_chart(df.groupby('date')['quantity_sold'].sum())
+    st.bar_chart(df.groupby('item_name')['quantity_sold'].sum())
+    st.bar_chart(df.groupby('is_weekend')['quantity_sold'].mean())
+    st.bar_chart(df.groupby('day')['quantity_sold'].mean())
 
     # -----------------------------
-    # 📘 EDA
+    # EDA
     # -----------------------------
-    st.header("📘 EDA Methodology")
+    st.header("📘 EDA")
 
-    baseline = df.groupby('Item Name').agg(
-        avg_daily=('Quantity sold', 'mean'),
-        weekday_avg=('Quantity sold', lambda x: x[df.loc[x.index, 'Is_Weekend']==False].mean()),
-        weekend_avg=('Quantity sold', lambda x: x[df.loc[x.index, 'Is_Weekend']==True].mean()),
-        volatility=('Quantity sold', 'std')
+    baseline = df.groupby('item_name').agg(
+        avg_daily=('quantity_sold', 'mean'),
+        weekday_avg=('quantity_sold', lambda x: x[df.loc[x.index, 'is_weekend']==False].mean()),
+        weekend_avg=('quantity_sold', lambda x: x[df.loc[x.index, 'is_weekend']==True].mean()),
+        volatility=('quantity_sold', 'std')
     )
 
     baseline['uplift_%'] = ((baseline['weekend_avg'] - baseline['weekday_avg']) / baseline['weekday_avg']) * 100
-
     st.dataframe(baseline)
 
     # -----------------------------
-    # 🎯 EVENT IMPACT
+    # Event Impact
     # -----------------------------
-    st.header("🎯 Event Impact Analysis")
+    st.header("🎯 Event Impact")
 
-    event_impact = df.groupby('Event')['Quantity sold'].mean()
-    normal = event_impact.get('Normal', event_impact.mean())
+    event_impact = df.groupby('event')['quantity_sold'].mean()
+    normal = event_impact.get('normal', event_impact.mean())
 
-    impact_df = ((event_impact - normal) / normal) * 100
-    impact_df = impact_df.reset_index()
-    impact_df.columns = ['Event', '% Change']
+    impact = ((event_impact - normal) / normal) * 100
+    impact = impact.reset_index()
+    impact.columns = ['event', '% change']
 
-    def classify(x):
-        if x > 20:
-            return "High Impact 📈"
-        elif x > 5:
-            return "Moderate 📊"
-        elif x < -20:
-            return "Negative 📉"
-        else:
-            return "No Impact ⚖️"
-
-    impact_df['Impact Type'] = impact_df['% Change'].apply(classify)
-
-    st.dataframe(impact_df)
-    st.bar_chart(impact_df.set_index('Event')['% Change'])
+    st.dataframe(impact)
+    st.bar_chart(impact.set_index('event')['% change'])
 
     # -----------------------------
-    # 🍛 ITEM ANALYSIS
+    # Item Sensitivity
     # -----------------------------
     st.header("🍛 Item Sensitivity")
 
     pivot = df.pivot_table(
-        values='Quantity sold',
-        index='Item Name',
-        columns='Event',
+        values='quantity_sold',
+        index='item_name',
+        columns='event',
         aggfunc='mean'
     )
 
@@ -171,33 +133,33 @@ if file:
     st.bar_chart(pivot.fillna(0))
 
     # -----------------------------
-    # 🤖 FORECAST
+    # Forecast
     # -----------------------------
     st.header("🤖 Forecast")
 
-    df = df.sort_values('Date')
-    df['lag1'] = df.groupby('Item Name')['Quantity sold'].shift(1)
+    df = df.sort_values('date')
+    df['lag1'] = df.groupby('item_name')['quantity_sold'].shift(1)
     df = df.dropna()
 
     le_item = LabelEncoder()
     le_day = LabelEncoder()
     le_event = LabelEncoder()
 
-    df['Item_enc'] = le_item.fit_transform(df['Item Name'])
-    df['Day_enc'] = le_day.fit_transform(df['Day'])
-    df['Event_enc'] = le_event.fit_transform(df['Event'])
+    df['item_enc'] = le_item.fit_transform(df['item_name'])
+    df['day_enc'] = le_day.fit_transform(df['day'])
+    df['event_enc'] = le_event.fit_transform(df['event'])
 
-    X = df[['Item_enc', 'Day_enc', 'Event_enc', 'lag1']]
-    y = df['Quantity sold']
+    X = df[['item_enc', 'day_enc', 'event_enc', 'lag1']]
+    y = df['quantity_sold']
 
     model = RandomForestRegressor()
     model.fit(X, y)
 
-    st.sidebar.header("🔮 Forecast Input")
+    st.sidebar.header("🔮 Forecast")
 
-    item = st.sidebar.selectbox("Item", df['Item Name'].unique())
-    day = st.sidebar.selectbox("Day", df['Day'].unique())
-    event = st.sidebar.selectbox("Event", df['Event'].unique())
+    item = st.sidebar.selectbox("Item", df['item_name'].unique())
+    day = st.sidebar.selectbox("Day", df['day'].unique())
+    event = st.sidebar.selectbox("Event", df['event'].unique())
     lag = st.sidebar.number_input("Previous Day Sales", min_value=0)
 
     if st.sidebar.button("Predict"):
@@ -207,35 +169,34 @@ if file:
                                lag]])
         st.success(f"Predicted Demand: {int(pred[0])}")
 
-    # Bulk Forecast
-    st.subheader("📦 Kitchen Preparation Plan")
-
+    # Bulk
     results = []
-    for item in df['Item Name'].unique():
-        pred = model.predict([[le_item.transform([item])[0],
-                               le_day.transform([day])[0],
-                               le_event.transform([event])[0],
-                               lag]])
-        results.append([item, int(pred[0])])
+    for i in df['item_name'].unique():
+        p = model.predict([[le_item.transform([i])[0],
+                            le_day.transform([day])[0],
+                            le_event.transform([event])[0],
+                            lag]])
+        results.append([i, int(p[0])])
 
-    result_df = pd.DataFrame(results, columns=["Item", "Predicted Demand"])
-    st.dataframe(result_df)
+    st.dataframe(pd.DataFrame(results, columns=["item", "prediction"]))
 
     # -----------------------------
-    # 🚨 SURPRISE DAYS
+    # Anomaly Detection
     # -----------------------------
     st.header("🚨 Surprise Days")
 
-    mean = df['Quantity sold'].mean()
-    std = df['Quantity sold'].std()
+    mean = df['quantity_sold'].mean()
+    std = df['quantity_sold'].std()
 
-    df['Z'] = (df['Quantity sold'] - mean) / std
-    df['Anomaly'] = df['Z'].apply(lambda x: "Spike" if x > 1.8 else ("Drop" if x < -1.8 else "Normal"))
+    df['z'] = (df['quantity_sold'] - mean) / std
 
-    anomalies = df[df['Anomaly'] != "Normal"]
+    df['anomaly'] = df['z'].apply(
+        lambda x: "Spike" if x > 1.8 else ("Drop" if x < -1.8 else "Normal")
+    )
 
-    st.dataframe(anomalies[['Date', 'Item Name', 'Quantity sold', 'Anomaly', 'Event']])
+    anomalies = df[df['anomaly'] != "Normal"]
+
+    st.dataframe(anomalies[['date', 'item_name', 'quantity_sold', 'anomaly', 'event']])
 
 else:
     st.info("👆 Upload your dataset to begin analysis")
-```

@@ -23,6 +23,7 @@ if file:
 
     # ✅ STANDARDIZE COLUMN NAMES (ONLY ONCE)
     df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
+    df.rename(columns={'primary_item': 'item_name'}, inplace=True)
 
     # ✅ AUTO-MAP COMMON COLUMN VARIATIONS
     col_map = {

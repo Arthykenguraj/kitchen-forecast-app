@@ -32,6 +32,32 @@ if file:
     # -----------------------------
     df = pd.read_excel(file) if file.name.endswith("xlsx") else pd.read_csv(file)
 
+    # ✅ CLEAN COLUMN NAMES (fixes your error)
+    df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
+
+    # Debug: show detected columns
+    st.write("Detected Columns:", df.columns)
+
+    # ✅ RENAME FLEXIBLY
+    df = df.rename(columns={
+        'date': 'Date',
+        'item_name': 'Item Name',
+        'item': 'Item Name',
+        'product': 'Item Name',
+        'quantity_sold': 'Quantity sold',
+        'qty': 'Quantity sold',
+        'quantity': 'Quantity sold',
+        'event': 'Event'
+    })
+
+    # ✅ CHECK REQUIRED COLUMNS
+    required_cols = ['Date', 'Item Name', 'Quantity sold']
+    missing = [col for col in required_cols if col not in df.columns]
+
+    if missing:
+        st.error(f"❌ Missing columns: {missing}")
+        st.stop()
+
     df['Date'] = pd.to_datetime(df['Date'])
 
     # Fill missing event
@@ -47,7 +73,6 @@ if file:
     df['Is_Weekend'] = df['Day'].isin(['Saturday', 'Sunday'])
     df['Month'] = df['Date'].dt.month
 
-    # Add Weekend as event
     df.loc[df['Is_Weekend'], 'Event'] = df['Event'] + "_Weekend"
 
     # -----------------------------
@@ -72,7 +97,7 @@ if file:
     trend = df.groupby('Date')['Quantity sold'].sum()
     st.line_chart(trend)
 
-    # Category (Item-based proxy)
+    # Item distribution
     st.subheader("🍛 Item Distribution")
     item_dist = df.groupby('Item Name')['Quantity sold'].sum()
     st.bar_chart(item_dist)
@@ -88,11 +113,9 @@ if file:
     st.bar_chart(day_pattern)
 
     # -----------------------------
-    # 📘 EDA STEPS
+    # 📘 EDA
     # -----------------------------
     st.header("📘 EDA Methodology")
-
-    st.subheader("Baseline Demand Table")
 
     baseline = df.groupby('Item Name').agg(
         avg_daily=('Quantity sold', 'mean'),
@@ -117,7 +140,6 @@ if file:
     impact_df = impact_df.reset_index()
     impact_df.columns = ['Event', '% Change']
 
-    # Classification
     def classify(x):
         if x > 20:
             return "High Impact 📈"
@@ -131,7 +153,6 @@ if file:
     impact_df['Impact Type'] = impact_df['% Change'].apply(classify)
 
     st.dataframe(impact_df)
-
     st.bar_chart(impact_df.set_index('Event')['% Change'])
 
     # -----------------------------
@@ -147,8 +168,6 @@ if file:
     )
 
     st.dataframe(pivot)
-
-    st.subheader("Grouped View")
     st.bar_chart(pivot.fillna(0))
 
     # -----------------------------
@@ -182,12 +201,10 @@ if file:
     lag = st.sidebar.number_input("Previous Day Sales", min_value=0)
 
     if st.sidebar.button("Predict"):
-
         pred = model.predict([[le_item.transform([item])[0],
                                le_day.transform([day])[0],
                                le_event.transform([event])[0],
                                lag]])
-
         st.success(f"Predicted Demand: {int(pred[0])}")
 
     # Bulk Forecast
@@ -213,7 +230,6 @@ if file:
     std = df['Quantity sold'].std()
 
     df['Z'] = (df['Quantity sold'] - mean) / std
-
     df['Anomaly'] = df['Z'].apply(lambda x: "Spike" if x > 1.8 else ("Drop" if x < -1.8 else "Normal"))
 
     anomalies = df[df['Anomaly'] != "Normal"]
@@ -222,3 +238,4 @@ if file:
 
 else:
     st.info("👆 Upload your dataset to begin analysis")
+```
